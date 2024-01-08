@@ -19,7 +19,7 @@
     (println (tasks/get-url task-id))))
 
 (defn print-search! [cmd]
-  (let [query (first (:args cmd))]
+  (let [query (str/join " " (:args cmd))]
     (->> (tasks/search query)
          (map #(str (:my-id %) "\t-\t" (:name %)))
          (str/join "\n")

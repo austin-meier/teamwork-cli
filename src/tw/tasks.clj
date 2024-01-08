@@ -16,10 +16,10 @@
         (recur (inc page) (into tasks (:todo-items body)))))))
 
 (defn index-task [task]
-  (let [index (:tasks (context/get-context))]
-    (when (string? (:id task)) (update task :id parse-long)) 
+  (let [index (:tasks (context/get-context))
+        task (if (string? (:id task)) (update task :id parse-long) task)]
     (if (contains? index (:id task))
-      (assoc task :my-id (get (:id task) index))
+      (assoc task :my-id (get index (:id task)))
       (context/index-task task))))
 
 (defn get-tasks []
@@ -34,15 +34,19 @@
     (when (contains? index task) 
       (client/get (str "tasks/" (get index task) ".json")))))
 
-(defn get-url [task]
-  (let [context (context/get-context)]
+(defn get-url [task-id]
+  (let [context (context/get-context)
+        index (lookup-table)]
+    (prn index)
     (str (:teamwork-base context) 
          "app/tasks/" 
-         (get-in context [:tasks task]))))
+         (get index task-id))))
 
 (defn search [query]
   (->> (client/get "search.json" 
-                     {:query-params {"searchFor" "tasks" "searchTerm" query}})
+                   {:query-params 
+                      {"searchFor" "tasks" 
+                       "searchTerm" query}})
          :searchResult
          :tasks
          (map index-task)))
