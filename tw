@@ -38,7 +38,7 @@
         (do (create-context!) (get-context))))))
 
 (defn index-task [task]
-  (swap! context assoc-in [:tasks (:next-id @context)] (:id task))
+  (swap! context assoc-in [:tasks (:id task)] (:next-id @context))
   (swap! context update :next-id inc)
   (assoc task :my-id (get (:tasks @context) (:id task))))
 
@@ -91,7 +91,8 @@
       req))))
 (ns tw.tasks
   (:require [tw.client :as client]
-            [tw.context :as context]))
+            [tw.context :as context]
+            [clojure.set :refer [map-invert]]))
 
 ;; they dont give me a remaining or counter... so i guess i can just compare to the total returned per page and see what that means
 (defn -get-tasks []
@@ -105,18 +106,22 @@
         (into tasks (:todo-items body))
         (recur (inc page) (into tasks (:todo-items body)))))))
 
+(defn index-task [task]
+  (let [index (:tasks (context/get-context))]
+    (when (string? (:id task)) (update task :id parse-long)) 
+    (if (contains? index (:id task))
+      (assoc task :my-id (get (:id task) index))
+      (context/index-task task))))
 
 (defn get-tasks []
-  (let [index (:tasks (context/get-context))
-        tasks (-get-tasks)]
-    (map (fn [task]
-           (if (contains? index (:id task))
-             (assoc task :my-id (get (:id task) index))
-             (context/index-task task))) 
-           tasks)))
+  (let [tasks (-get-tasks)]
+    (map index-task tasks)))
+
+(defn lookup-table []
+  (map-invert (:tasks (context/get-context))))
 
 (defn get-task [task]
-  (let [index (:tasks (context/get-context))]
+  (let [index (lookup-table)]
     (when (contains? index task) 
       (client/get (str "tasks/" (get index task) ".json")))))
 
@@ -126,6 +131,13 @@
          "app/tasks/" 
          (get-in context [:tasks task]))))
 
+(defn search [query]
+  (->> (client/get "search.json" 
+                     {:query-params {"searchFor" "tasks" "searchTerm" query}})
+         :searchResult
+         :tasks
+         (map index-task)))
+
 (comment 
 
   (get-tasks)
@@ -133,6 +145,8 @@
 
   (get-task 277)
   (get-url 277)
+
+  (search "multiple elements")
 
 )
 
@@ -143,8 +157,6 @@
             [tw.context :as context]
             [babashka.cli :as cli]
             [clojure.string :as str]))
-
-
 
 (defn print-tasks! [cmd]
   (prn (tasks/get-tasks))
@@ -158,6 +170,13 @@
   (let [task-id (or (parse-long (first (:args cmd))) 0)]
     (println (tasks/get-url task-id))))
 
+(defn print-search! [cmd]
+  (let [query (first (:args cmd))]
+    (->> (tasks/search query)
+         (map #(str (:my-id %) "\t-\t" (:name %)))
+         (str/join "\n")
+         println)))
+
 (def cli-opts
   {:task      {:alias   :t
                :desc    "A teamwork task id"
@@ -165,8 +184,9 @@
                :require true}})
 
 (def table
-  [{:cmds ["tasks"] :fn print-tasks! :desc "Get all current tasks" :usage ""}
+  [{:cmds ["tasks"] :fn print-tasks! :desc "Get all current tasks"}
    {:cmds ["task"] :fn print-task! :desc "Get specific task by id"}
+   {:cmds ["search"] :fn print-search! :desc "Search for tasks by query"}
    {:cmds ["url"] :fn print-task-url! :desc "Get the URL of a task"}])
 
 (defn help [_]
@@ -181,5 +201,3 @@
   (conj table {:cmds [] :fn help}))
 
 (cli/dispatch dispatch-table *command-line-args*)
-
-

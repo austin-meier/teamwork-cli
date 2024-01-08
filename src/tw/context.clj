@@ -36,7 +36,7 @@
         (do (create-context!) (get-context))))))
 
 (defn index-task [task]
-  (swap! context assoc-in [:tasks (:next-id @context)] (:id task))
+  (swap! context assoc-in [:tasks (:id task)] (:next-id @context))
   (swap! context update :next-id inc)
   (assoc task :my-id (get (:tasks @context) (:id task))))
 

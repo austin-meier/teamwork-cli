@@ -1,6 +1,7 @@
 (ns tw.tasks
   (:require [tw.client :as client]
-            [tw.context :as context]))
+            [tw.context :as context]
+            [clojure.set :refer [map-invert]]))
 
 ;; they dont give me a remaining or counter... so i guess i can just compare to the total returned per page and see what that means
 (defn -get-tasks []
@@ -14,18 +15,22 @@
         (into tasks (:todo-items body))
         (recur (inc page) (into tasks (:todo-items body)))))))
 
+(defn index-task [task]
+  (let [index (:tasks (context/get-context))]
+    (when (string? (:id task)) (update task :id parse-long)) 
+    (if (contains? index (:id task))
+      (assoc task :my-id (get (:id task) index))
+      (context/index-task task))))
 
 (defn get-tasks []
-  (let [index (:tasks (context/get-context))
-        tasks (-get-tasks)]
-    (map (fn [task]
-           (if (contains? index (:id task))
-             (assoc task :my-id (get (:id task) index))
-             (context/index-task task))) 
-           tasks)))
+  (let [tasks (-get-tasks)]
+    (map index-task tasks)))
+
+(defn lookup-table []
+  (map-invert (:tasks (context/get-context))))
 
 (defn get-task [task]
-  (let [index (:tasks (context/get-context))]
+  (let [index (lookup-table)]
     (when (contains? index task) 
       (client/get (str "tasks/" (get index task) ".json")))))
 
@@ -35,6 +40,13 @@
          "app/tasks/" 
          (get-in context [:tasks task]))))
 
+(defn search [query]
+  (->> (client/get "search.json" 
+                     {:query-params {"searchFor" "tasks" "searchTerm" query}})
+         :searchResult
+         :tasks
+         (map index-task)))
+
 (comment 
 
   (get-tasks)
@@ -42,6 +54,8 @@
 
   (get-task 277)
   (get-url 277)
+
+  (search "multiple elements")
 
 )
 

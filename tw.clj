@@ -6,8 +6,6 @@
             [babashka.cli :as cli]
             [clojure.string :as str]))
 
-
-
 (defn print-tasks! [cmd]
   (prn (tasks/get-tasks))
   (context/save!))
@@ -20,6 +18,13 @@
   (let [task-id (or (parse-long (first (:args cmd))) 0)]
     (println (tasks/get-url task-id))))
 
+(defn print-search! [cmd]
+  (let [query (first (:args cmd))]
+    (->> (tasks/search query)
+         (map #(str (:my-id %) "\t-\t" (:name %)))
+         (str/join "\n")
+         println)))
+
 (def cli-opts
   {:task      {:alias   :t
                :desc    "A teamwork task id"
@@ -27,8 +32,9 @@
                :require true}})
 
 (def table
-  [{:cmds ["tasks"] :fn print-tasks! :desc "Get all current tasks" :usage ""}
+  [{:cmds ["tasks"] :fn print-tasks! :desc "Get all current tasks"}
    {:cmds ["task"] :fn print-task! :desc "Get specific task by id"}
+   {:cmds ["search"] :fn print-search! :desc "Search for tasks by query"}
    {:cmds ["url"] :fn print-task-url! :desc "Get the URL of a task"}])
 
 (defn help [_]
@@ -43,5 +49,3 @@
   (conj table {:cmds [] :fn help}))
 
 (cli/dispatch dispatch-table *command-line-args*)
-
-
