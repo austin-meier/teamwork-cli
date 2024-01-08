@@ -15,12 +15,14 @@
 
 	**_bash_**
 	```sh
-	export PATH="<PATH TO THIS DIR>:$PATH" >> ~/.bashrc
+	echo 'export PATH="<SCRIPT DIRECTORY>:$PATH"' >> ~/.bashrc
+    source ~/.bashrc
 	```
     
     **_zsh_**
 	```sh
-	export PATH="<PATH TO THIS DIR>:$PATH" >> ~/.zshrc
+	echo 'export PATH="<SCRIPT DIRECTORY>:$PATH"' >> ~/.zshrc
+    source ~/.zshrc
 	```
 5. **Please Note:** The commands below assume you have added this to PATH, if you have not you will need to invoke the commands by running the main `tw` script in the directory. For Example:
 	```sh
