@@ -128,7 +128,6 @@
 (defn get-url [task-id]
   (let [context (context/get-context)
         index (lookup-table)]
-    (prn index)
     (str (:teamwork-base context) 
          "app/tasks/" 
          (get index task-id))))
