@@ -1,7 +1,7 @@
 # Teamwork CLI
 
 ### Getting Started
-1. Install [Babashka](https://github.com/babashka/babashka#installation) - This is a Clojure scripting runtime based on GraalVM. Installation instructions can be found at the link or easily installed with Homebrew
+1. Install [Babashka](https://github.com/babashka/babashka#installation) - This is a native Clojure interpreter scripting runtime based on Java's GraalVM. Installation instructions can be found at the link or easily installed with Homebrew
  	```sh
   	brew install borkdude/brew/babashka
   	```
