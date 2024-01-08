@@ -1,0 +1,185 @@
+#!/usr/bin/env bb
+
+(ns tw.context
+  (:require [babashka.fs :as fs]
+            [clojure.edn :as edn]))
+
+(def CONTEXT-DIR (str (fs/home) "/.config/teamwork-cli/"))
+(def CONTEXT-FILE "data.edn")
+(def CONTEXT-PATH (str CONTEXT-DIR CONTEXT-FILE))
+
+(def context (atom nil))
+
+(def blank-context 
+  {:teamwork-base "https://your-team-url.teamwork.com/"
+   :api-key "INSERT API KEY IN QUOTES"
+   :next-id 100
+   :tasks {}})
+
+(defn create-context! []
+  (fs/create-dirs CONTEXT-DIR)
+  (spit CONTEXT-PATH blank-context)
+  blank-context)
+
+(defn save! []
+  (spit CONTEXT-PATH @context))
+
+(defn verify-context [context]
+  (if (= blank-context context)
+    (throw (ex-info "Your Teamwork base URL and API-Key need configured. Please update them" {:context-location CONTEXT-PATH})) 
+    context))
+
+(defn get-context []
+  (or
+    @context
+    (reset! context
+      (if (fs/exists? CONTEXT-PATH)
+        (verify-context (edn/read-string (slurp CONTEXT-PATH)))
+        (do (create-context!) (get-context))))))
+
+(defn index-task [task]
+  (swap! context assoc-in [:tasks (:next-id @context)] (:id task))
+  (swap! context update :next-id inc)
+  (assoc task :my-id (get (:tasks @context) (:id task))))
+
+
+(comment
+  ;; Reset
+  (reset! context nil)
+
+  ;; Creating the local context
+  (create-context!)
+
+  ;; Loading the context
+  (get-context) 
+
+  (:tasks (get-context))
+
+  ;; Save context
+  (save!)
+
+
+)
+(ns tw.client
+  (:require [babashka.http-client :as http]
+            [cheshire.core :as json]
+            [tw.context :as context]))
+
+(defn b64-encode [txt]
+  (let [encoder (java.util.Base64/getEncoder)
+        resultBytes (.encode encoder (.getBytes txt))]
+    (String. resultBytes)))
+
+(defn deep-merge [a & maps]
+  (if (map? a)
+    (apply merge-with deep-merge a maps)
+    (apply merge-with deep-merge maps)))
+
+(defn parse-body [req]
+  (when (:body req)
+    (json/parse-string (:body req) true)))
+
+(defn get 
+  ([path] (get path {}))
+  ([path req-data] 
+   (let [context (context/get-context)
+         token (str "Basic " (b64-encode (:api-key context)))
+         data (merge-with into {:headers {"Authorization" token}} req-data)
+         req (http/get (str (:teamwork-base context) path) data)]
+    (case (:status req)
+      200 (parse-body req)
+      req))))
+(ns tw.tasks
+  (:require [tw.client :as client]
+            [tw.context :as context]))
+
+;; they dont give me a remaining or counter... so i guess i can just compare to the total returned per page and see what that means
+(defn -get-tasks []
+  (loop [page 1
+         tasks []]
+    (let [page-size 250
+          body (client/get "/tasks.json"
+                                   {:query-params {"page" page
+                                                   "pageSize" page-size}})]
+      (if (not= page-size (count (:todo-items body)))
+        (into tasks (:todo-items body))
+        (recur (inc page) (into tasks (:todo-items body)))))))
+
+
+(defn get-tasks []
+  (let [index (:tasks (context/get-context))
+        tasks (-get-tasks)]
+    (map (fn [task]
+           (if (contains? index (:id task))
+             (assoc task :my-id (get (:id task) index))
+             (context/index-task task))) 
+           tasks)))
+
+(defn get-task [task]
+  (let [index (:tasks (context/get-context))]
+    (when (contains? index task) 
+      (client/get (str "tasks/" (get index task) ".json")))))
+
+(defn get-url [task]
+  (let [context (context/get-context)]
+    (str (:teamwork-base context) 
+         "app/tasks/" 
+         (get-in context [:tasks task]))))
+
+(comment 
+
+  (get-tasks)
+  (count (get-tasks))
+
+  (get-task 277)
+  (get-url 277)
+
+)
+
+
+
+(ns tw
+  (:require [tw.tasks :as tasks]
+            [tw.context :as context]
+            [babashka.cli :as cli]
+            [clojure.string :as str]))
+
+
+
+(defn print-tasks! [cmd]
+  (prn (tasks/get-tasks))
+  (context/save!))
+
+(defn print-task! [cmd]
+  (let [task-id (or (parse-long (first (:args cmd))) 0)]
+    (println (tasks/get-task task-id))))
+
+(defn print-task-url! [cmd]
+  (let [task-id (or (parse-long (first (:args cmd))) 0)]
+    (println (tasks/get-url task-id))))
+
+(def cli-opts
+  {:task      {:alias   :t
+               :desc    "A teamwork task id"
+               :coerce [:long]
+               :require true}})
+
+(def table
+  [{:cmds ["tasks"] :fn print-tasks! :desc "Get all current tasks" :usage ""}
+   {:cmds ["task"] :fn print-task! :desc "Get specific task by id"}
+   {:cmds ["url"] :fn print-task-url! :desc "Get the URL of a task"}])
+
+(defn help [_]
+  (println
+    (reduce (fn [acc, cmd]
+              (str acc 
+                   (str/join ", " (:cmds cmd)) "\n\t"
+                   (:desc cmd) "\n")) 
+            "" table)))
+
+(def dispatch-table 
+  (conj table {:cmds [] :fn help}))
+
+(cli/dispatch dispatch-table *command-line-args*)
+
+
