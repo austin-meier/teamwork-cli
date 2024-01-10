@@ -17,13 +17,20 @@
   (when (:body req)
     (json/parse-string (:body req) true)))
 
-(defn get 
-  ([path] (get path {}))
-  ([path req-data] 
+(defn -request 
+  ([path fn] (-request path fn {}))
+  ([path fn req-data] 
    (let [context (context/get-context)
          token (str "Basic " (b64-encode (:api-key context)))
-         data (merge-with into {:headers {"Authorization" token}} req-data)
-         req (http/get (str (:teamwork-base context) path) data)]
-    (case (:status req)
-      200 (parse-body req)
-      req))))
+         data (merge-with into {:throw false :headers {"Authorization" token}} req-data)
+         req (fn (str (:teamwork-base context) path) data)]
+    (parse-body req))))
+
+(defn get [path & others] 
+  (apply -request path http/get others))
+
+(defn put [path & others] 
+  (apply -request path http/put others))
+
+(defn post [path & others] 
+  (apply -request path http/post others))

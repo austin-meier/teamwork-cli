@@ -4,15 +4,17 @@
   (:require [tw.tasks :as tasks]
             [tw.context :as context]
             [babashka.cli :as cli]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [clojure.pprint :refer [pprint]]))
 
 (defn print-tasks! [cmd]
-  (prn (tasks/get-tasks))
-  (context/save!))
+  (tasks/index-tasks)
+  (context/save!)
+  (println (str "Now tracking " (count (:tasks (context/get-context))) " tasks")))
 
 (defn print-task! [cmd]
   (let [task-id (or (parse-long (first (:args cmd))) 0)]
-    (println (tasks/get-task task-id))))
+    (pprint (tasks/get-task task-id))))
 
 (defn print-task-url! [cmd]
   (let [task-id (or (parse-long (first (:args cmd))) 0)]
@@ -23,7 +25,13 @@
     (->> (tasks/search query)
          (map #(str (:my-id %) "\t-\t" (:name %)))
          (str/join "\n")
-         println)))
+         println))
+  (context/save!))
+
+(defn move-task! [cmd]
+  (let [task-id (or (parse-long (first (:args cmd))) 0)
+        board (second (:args cmd))]
+    (tasks/move-task task-id board)))
 
 (def cli-opts
   {:task      {:alias   :t
@@ -32,9 +40,10 @@
                :require true}})
 
 (def table
-  [{:cmds ["tasks"] :fn print-tasks! :desc "Get all current tasks"}
+  [{:cmds ["index"] :fn print-tasks! :desc "Index all current tasks"}
    {:cmds ["task"] :fn print-task! :desc "Get specific task by id"}
    {:cmds ["search"] :fn print-search! :desc "Search for tasks by query"}
+   {:cmds ["move"] :fn move-task! :desc "Move a task to one of the boards"}
    {:cmds ["url"] :fn print-task-url! :desc "Get the URL of a task"}])
 
 (defn help [_]
