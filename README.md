@@ -26,7 +26,7 @@
 	```
 5. **Please Note:** The commands below assume you have added this to PATH, if you have not you will need to invoke the commands by running the main `tw` script in the directory. For Example:
 	```sh
-	./tw tasks
+	./tw index
 	```
 
 
@@ -45,8 +45,34 @@ In Teamwork.com, click your avatar in the bottom left.
 ```
 
 ### Tasks
+
+#### Index all tasks
 ```sh
-tw tasks
+tw index
+```
+#### Search for tasks
+This will return a nice printout with the local index numbers for the tasks that are easy to remember. Use these number to feed in to further commands
+```sh
+tw search <query>
+```
+
+#### Move a task between boards 
+```sh
+tw move <task-id> <board-name>
+```
+Valid boards are:
+```
+open
+progress
+review
+ready
+staging
+completed
+```
+
+#### Pretty print the data of a task (for now)
+```sh
+tw task <local
 ```
 
 
